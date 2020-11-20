@@ -1,7 +1,6 @@
 # Import modules
 import csv
 import random
-from numpy.core.fromnumeric import shape
 from skimage.util import random_noise
 from skimage.transform import rotate
 from skimage.exposure import adjust_gamma
@@ -11,9 +10,9 @@ import tensorflow as tf
 from scipy import ndimage
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-from keras.applications.resnet50 import ResNet50, preprocess_input
-from keras.models import Sequential
-from keras.layers import Flatten, Dense, Lambda, Conv2D, MaxPooling2D, Dropout, Cropping2D
+from keras.applications.resnet50 import ResNet50
+from keras.models import Model
+from keras.layers import Dense, Lambda, Dropout, Input, GlobalAveragePooling2D
 
 
 csv_file = '../../../opt/carnd_p3/data/driving_log.csv'
@@ -24,7 +23,7 @@ with open(csv_file, 'r') as f:
     samples = [line for line in reader]
 
 # Get train and validation samples
-train_samples, validation_samples = train_test_split(samples[1:], test_size=0.25)
+train_samples, validation_samples = train_test_split(samples[1:], test_size=0.2)
 
 
 def get_img(source_path):
@@ -51,47 +50,33 @@ def get_images_and_labels(samples, is_augment=False):
         images.extend(images_crl)
         steering_measurements.extend(steering_clr)
 
-        if not is_augment:
+        if not is_augment or steering_center == 0.0:
             continue
 
         # Horizontal flipped
-        flipped_images = map(np.fliplr, images_crl)
-        flipped_steering = map(lambda x: -x, steering_clr)
-        images.extend(list(flipped_images))
-        steering_measurements.extend(list(flipped_steering))
-
-        if steering_center == 0.0:
-            continue
+        images.extend(list(map(np.fliplr, images_crl)))
+        steering_measurements.extend(list(map(lambda x: -x, steering_clr)))
 
         # Random noise
-        noised_images = map(random_noise, images_crl)
-        images.extend(list(noised_images))
-        steering_measurements.extend(steering_clr)
-
-        # Random inversion
-        inversioned_images = map(np.invert, images_crl)
-        images.extend(list(inversioned_images))
+        images.extend(list(map(random_noise, images_crl)))
         steering_measurements.extend(steering_clr)
 
         # Random rotation
-        rotated_images = map(lambda img: rotate(img, 5), images_crl)
-        images.extend(list(rotated_images))
+        images.extend(list(map(lambda img: rotate(img, 10), images_crl)))
         steering_measurements.extend(steering_clr)
 
         # Blurred
-        blurred_images = map(lambda img: ndimage.gaussian_filter(img, 3), images_crl)
-        images.extend(list(blurred_images))
+        images.extend(list(map(lambda img: ndimage.gaussian_filter(img, 3), images_crl)))
         steering_measurements.extend(steering_clr)
 
         # Random briteness
-        britened_images = map(lambda img: adjust_gamma(img, gamma=random.uniform(0, 2), gain=1.), images_crl)
-        images.extend(list(britened_images))
+        images.extend(list(map(lambda img: adjust_gamma(img, gamma=random.uniform(0, 2), gain=1.), images_crl)))
         steering_measurements.extend(steering_clr)
 
     return images, steering_measurements
 
 
-def generator(samples, batch_size=64, is_augment=False):
+def generator(samples, batch_size=32, is_augment=False):
     n_samples = len(samples)
     while 1:  # Loop forever so that generator never terminates
         shuffle(samples)
@@ -106,59 +91,53 @@ def generator(samples, batch_size=64, is_augment=False):
 
 
 # Hyperparam
-batch_size = 64
-input_size = 139
+batch_size = 32
 
 # Coroutine for train and validation samples
 train_generator = generator(train_samples, batch_size=batch_size, is_augment=True)
-validation_generator = generator(validation_samples, batch_size=batch_size)
+validation_generator = generator(validation_samples, batch_size=batch_size, is_augment=False)
 
-# Using transfer leaning by resnet50
-model = ResNet50(weights='imagenet', include_top=False,
-                 input_shape=(input_size, input_size, 3))
-model.pop()
 
-for layer in model.layers:
+# ------------------------------------------------
+# Following is the definition of a model
+train_samples_shape = (160, 320, 3)
+model_input_shape = (56, 112, 3)  # original shape is 224 * 224
+
+# Using resnet50 for transfer learning
+resnet = ResNet50(weights='imagenet', include_top=False,
+                  input_shape=model_input_shape)
+resnet.layers.pop()
+
+for layer in resnet.layers:
     layer.trainable = False
 
-road_input = input(shape=(160, 320, 3))
-resized_input = Lambda(lambda img: tf.image.resize_images(img, (input_size, input_size)))(road_input)
+# model input placeholder
+model_inputs = Input(shape=train_samples_shape)
+normalized_inputs = Lambda(lambda img: (img / 255.0) - 0.5)(model_inputs)
+cropped_inputs = Lambda(lambda img: tf.image.crop_to_bounding_box(img, 60, 0, 80, train_samples_shape[2]))(normalized_inputs)
+resized_inputs = Lambda(lambda img: tf.image.resize_images(img, (model_input_shape[0], model_input_shape[1])))(cropped_inputs)
+resnet_outputs = resnet(resized_inputs)
 
-# Here is the definition of a model
-model = Sequential([
-    Lambda(lambda x: (x / 255.0) - 0.5, input_shape=(160, 320, 3)),
-    Cropping2D(cropping=((60, 20), (0, 0))),
-    Conv2D(3, (2, 2), activation='relu',
-           kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1)),
-    MaxPooling2D((2, 2)),
-    Conv2D(16, (2, 2), activation='relu',
-           kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1)),
-    MaxPooling2D((2, 2)),
-    Conv2D(32, (2, 2), activation='relu',
-           kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1)),
-    MaxPooling2D((2, 2)),
-    Conv2D(64, (2, 2), activation='relu',
-           kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1)),
-    MaxPooling2D((2, 2)),
-    Flatten(),
-    Dense(50, activation='relu', kernel_regularizer='l2'),
-    Dense(10, activation='relu', kernel_regularizer='l2'),
-])
-
+# For model outputs
+model_outputs = GlobalAveragePooling2D()(resnet_outputs)
+model_outputs = Dropout(0.2)(model_outputs)
+model_outputs = Dense(50, activation='relu', kernel_regularizer='l2')(model_outputs)
+model_outputs = Dense(10, activation='relu', kernel_regularizer='l2')(model_outputs)
+model_outputs = Dense(1)(model_outputs)  # Outputs a single value
+model = Model(inputs=model_inputs, outputs=model_outputs)
 model.summary()
-# Dropout(0.3),
-# Dense(100, activation='relu', kernel_regularizer='l2'),
-# Dense(1)  # outputs a single continuous numeric value
 
-# # Set optimizer and loss function
-# model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
-# # Train model
-# model.fit_generator(train_generator,
-#                     steps_per_epoch=ceil(len(train_samples)/batch_size),
-#                     validation_data=validation_generator,
-#                     validation_steps=ceil(len(validation_samples)/batch_size),
-#                     epochs=8,
-#                     verbose=1)
 
-# # Save model
-# model.save('model.h5')
+# Set optimizer and loss function
+model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+# Train model
+model.fit_generator(train_generator,
+                    steps_per_epoch=ceil(len(train_samples)/batch_size),
+                    validation_data=validation_generator,
+                    validation_steps=ceil(len(validation_samples)/batch_size),
+                    epochs=10,
+                    verbose=1)
+
+# Save model
+model.save('model.h5')
+print('Model was saved successfully')
