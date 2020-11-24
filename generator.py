@@ -18,42 +18,38 @@ def get_images_and_labels(samples, is_augment=False):
     steering_measurements = []
 
     for line in samples:
-        # Images are Center, Left, Right in this order
-        images_crl = [get_img(line[0]), get_img(line[1]), get_img(line[2])]
+        img_center = get_img(line[0])
+        img_left = get_img(line[1])
+        img_right = get_img(line[2])
+        img_clr = [img_center, img_left, img_right]
 
         # Steering
-        correction = 0.2  # Hyperparam for tuning left and right image steering
-        steering_center = float(line[3])
+        correction = random.uniform(0.2, 0.25)
+        steering_center = round(float(line[3]) * 50) / 50
         steering_left = steering_center + correction
         steering_right = steering_center - correction
         steering_clr = [steering_center, steering_left, steering_right]
 
-        images.extend(images_crl)
+        images.extend(img_clr)
         steering_measurements.extend(steering_clr)
 
-        # Augmentation happens only when training
         if not is_augment:
             continue
 
-        # Horizontal flipped
-        images.extend(list(map(np.fliplr, images_crl)))
-        steering_measurements.extend(list(map(lambda x: -x, steering_clr)))
+        for img, steering in zip(img_clr, steering_clr):
+            images.extend([np.fliplr(img),  # Horizontal flipped
+                           random_noise(img),  # Random noise
+                           rotate(img, random.uniform(-15, 15)),  # Random rotation
+                           ndimage.gaussian_filter(img, random.randrange(5, 17, 2)),  # Blurred
+                           adjust_gamma(img, gamma=random.uniform(0, 2), gain=1.),  # Random briteness
+                           ])
 
-        # Most frequent class image doesn't need much augmentation
-        if steering_center == 0.0:
-            continue
-
-        # Random noise
-        images.extend(list(map(random_noise, images_crl)))
-        steering_measurements.extend(steering_clr)
-
-        # Random rotation
-        images.extend(list(map(lambda img: rotate(img, 15), images_crl)))
-        steering_measurements.extend(steering_clr)
-
-        # Random briteness
-        images.extend(list(map(lambda img: adjust_gamma(img, gamma=random.uniform(0, 3), gain=1.), images_crl)))
-        steering_measurements.extend(steering_clr)
+            steering_measurements.extend([-steering,
+                                          steering,
+                                          steering,
+                                          steering,
+                                          steering,
+                                          ])
 
     return images, steering_measurements
 
