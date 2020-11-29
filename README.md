@@ -9,8 +9,9 @@ You can see my [first](https://github.com/Akitsuyoshi/CarND-LaneLines-P1), [seco
 - [Behavioral Cloning Project](#behavioral-cloning-project)
 - [Table of Contents](#table-of-contents)
 - [Overview](#overview)
+- [Pipeline](#pipeline)
   - [0 Dependencies](#0-dependencies)
-  - [1 How to run the trained car in the simulation](#1-how-to-run-the-trained-car-in-the-simulation)
+  - [1 Run the trained car in the simulation](#1-run-the-trained-car-in-the-simulation)
   - [2 Prepare the training / validation sets](#2-prepare-the-training--validation-sets)
   - [3 Design a model](#3-design-a-model)
     - [VGG16 setting](#vgg16-setting)
@@ -19,11 +20,11 @@ You can see my [first](https://github.com/Akitsuyoshi/CarND-LaneLines-P1), [seco
   - [5 Output](#5-output)
   - [6 Summary](#6-summary)
 - [Discussion](#discussion)
-  - [Approaches till getting to the final model](#approaches-till-getting-to-the-final-model)
   - [Problems during my implementation](#problems-during-my-implementation)
   - [Improvements to pipeline](#improvements-to-pipeline)
   - [Future Feature](#future-feature)
 - [References](#references)
+- [- memory leak error in keras](#--memory-leak-error-in-keras)
 - [Author](#author)
 
 ---
@@ -61,8 +62,13 @@ After feeding good datasets to the well defined model, the model train its input
 [image2]: ./examples/hist2.png "Histogram2"
 [image3]: ./examples/vgg16.png "VGG16"
 [image4]: ./examples/vgg16_mark.png "VGG16 Marked"
+[image5]: ./examples/hist3.png "Histogram3"
+[image6]: ./examples/augmentation.png "Augmentation"
+[image7]: ./examples/angles.png "3Angles"
 
 ---
+
+## Pipeline
 
 ### 0 Dependencies
 
@@ -84,7 +90,9 @@ To deal with that, I updated env by this script.***
 pip install --upgrade tensorflow-gpu==1.4.1
 ```
 
-### 1 How to run the trained car in the simulation
+### 1 Run the trained car in the simulation
+
+*If you don't wanna test the model, you can skip this step.*
 
 Using the Udacity simulator and my [drive.py](./drive.py) file, the car can be driven autonomously around the track by executing
 
@@ -110,9 +118,9 @@ And I use `sklearn.model_selection.train_test_split` to get training and validat
 
 #### VGG16 setting
 
-I made used of [VGG16](https://keras.io/api/applications/vgg/#vgg16-function) in keras for the transfer learning.
+I made used of [VGG16](https://keras.io/api/applications/vgg/#vgg16-function) in keras for the transfer learning. VGG16 serves as a feature extraction in this project. You can see the detail of that model at [this link](https://arxiv.org/pdf/1409.1556.pdf). I use VGG16 as pretrained model with imagenet because it works well even on small datasets like this project. In addition to that, I chose transfer learning to reduce traing time and expect high accuracy using state of the art technology. Sounds cool, isn't it?
 
-The picture below describes the VGG16 architecture:
+The below picture describes the VGG16 architecture:
 
 ![alt text][image3]
 
@@ -122,7 +130,7 @@ Those setting images are like:
 
 ![alt text][image4]
 
-The above pictures shows its original inputs size as `(224, 224, 64)`. However, I actually set it to `(96, 96, 3)` because it reduces training time.
+The above VGG16 pictures shows its original input size as `(224, 224, 64)`. However, I actually set it to `(96, 96, 3)` because it reduces training time more that the original one.
 
 #### Model architecture
 
@@ -154,11 +162,47 @@ In the layers after VGG16, three fully connected layers are followed. Dropout la
 
 ### 4 Training strategy
 
-Hyperparameters for training are:
+The final Hyperparameters for training are:
 
-- 0.005 learning rate
+- 0.005 learning **rate**
 - 32 batch size
 - 5 Epocs
+
+I've done fine tuning those paramaters every after testing the trained model in simulator. I realized that no matter how less training loss was, it doesn't mean that the model learned and worked well in test, simulation environment. So I always set training epocs to 1 to make sure that current change is on the right track when I train the model.
+
+During the training, I first faced underfitting result because of less trainable parameters in the model. So I added additional layers after VGG16 layer, and make last two convolutional layers in VGG16. It eliminated the underfitting, but once I increase the epoch number and datasets, that caused overfitting. To deal with that, I put dropout layers and put L2 regularization.
+
+I also normalized steering(label) value, by `round(float(steering) * 50) / 50` to make all steering in 0.2 increments.
+
+At this point, however, the model still couldn't curve the first left turn in track 1. So I see the datasets deviation, and filtered 80% of 0 angle images. And then I do image augmentation to increase less label(angle) images to make model train curve images more.
+
+These are image augmentations that I implemented in [generator.py](./generator.py).
+
+- Noised, using `skimage.util.random_noise`
+- Rotation, using `skimage.transform.rotate`
+- Blurred, using `scipy.ndimage.gaussian_filter`
+- Random Briteness, using `skimage.exposure.adjust_gamma`
+- Horizontal flip, using `np.fliplr`
+
+The above augmented images look like pic below. The images are original, noised, rotated, blurred, random briteness, and horizontal flip in a order from the upper left to bottom right.
+![alt text][image6]
+
+On top of those above augmentations, I use three camera angle images in datasets. These images can be the good input for the model to learn recovering from the left side and right sides of the road back to center.
+
+Three camera angle images are:
+![alt text][image7]
+
+The final total number of datasets increase from `4572` to `42973`.
+
+Before datasetse histogram:
+![alt text][image2]
+
+After image augmentation and adding three angle images:
+![alt text][image5]
+
+I prepared good enough amount of datasets for the training.
+
+To improve the training process, I use `keras.callbacks. ModelCheckpoint` to save only good result after each epoch.
 
 ### 5 Output
 
@@ -166,20 +210,50 @@ The output video can be found at [run1.mp4](./run1.mp4).
 
 ### 6 Summary
 
-## Discussion
+Here are the steps that I actually took.
 
-### Approaches till getting to the final model
+- Prepare the datasets
+- Filter too much label image(0 angle image in this project)
+- Split datasets into training and validating sets
+- Make a model, using VGG16 for transfer learning
+- Train the model
+- Fine tune the model
+- Test the model in simulator
+- Got bad result
+- Deal with underfitting / overfitting
+- Add augmented and three angle images
+- Train again
+
+I iterate steps from training to testing until getting to the final model and expected outputs, which model can predict good steering value and the car in autonomous mode drive 1 lap around the track 1.
+
+## Discussion
 
 ### Problems during my implementation
 
+My first missunderstanding was unfreezing all layers in VGG16. I thouht that was an appropriate way because I didn't know well transfer learning at that point. However, I noticed that it didn't make the model learn at all. So I seached [article](https://keras.io/guides/transfer_learning/#build-a-model) in keras to understand how transfer learning works.
+
+Another miss was train all datasets without any augmentation or preprocessing. That was totally waste of the time on second thoughts.
+
+Last miss was strategy when traing the model. I always set epoch 5 but I should have set it epoch 1 not to get lost my implementation. The thing is feedback of the model is important, but if I keep training without test, driving in the simulation in this case, I can easily get lost. To prevent from that lost time, I decided to set epoch 1 at the begining of my implementation.
+
 ### Improvements to pipeline
+
+- Change the way to preprocess datasets
+- Try another image augmentaions
 
 ### Future Feature
 
+- Test the track 2 to see how well model predicts.
+- Apply another model insted of VGG16
+- Prepare the datasets for training when implementing, which should be much smaller that the original datasets. That's good for quick feedback when designing a model.
+  
 ---
 
 ## References
 
+- [Transfer learning & fine-tuning](https://keras.io/guides/transfer_learning/#build-a-model)
+- [Paper about VGG16](https://arxiv.org/pdf/1409.1556.pdf)
+- [memory leak error in keras](https://stackoverflow.com/questions/49081129/keras-multi-gpu-model-error-swig-python-detected-a-memory-leak-of-type-int64)
 ---
 
 ## Author
