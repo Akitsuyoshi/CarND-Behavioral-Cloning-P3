@@ -24,7 +24,6 @@ You can see my [first](https://github.com/Akitsuyoshi/CarND-LaneLines-P1), [seco
   - [Improvements to pipeline](#improvements-to-pipeline)
   - [Future Feature](#future-feature)
 - [References](#references)
-- [- memory leak error in keras](#--memory-leak-error-in-keras)
 - [Author](#author)
 
 ---
@@ -254,6 +253,7 @@ Last miss was strategy when traing the model. I always set epoch 5 but I should 
 - [Transfer learning & fine-tuning](https://keras.io/guides/transfer_learning/#build-a-model)
 - [Paper about VGG16](https://arxiv.org/pdf/1409.1556.pdf)
 - [memory leak error in keras](https://stackoverflow.com/questions/49081129/keras-multi-gpu-model-error-swig-python-detected-a-memory-leak-of-type-int64)
+  
 ---
 
 ## Author
