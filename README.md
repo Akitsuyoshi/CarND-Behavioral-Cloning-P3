@@ -1,125 +1,174 @@
-# Behavioral Cloning Project
+## Behavioral Cloning Project
 
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
+This is my fourth project of [Self-Driving Car Engineer nanodegree program](https://www.udacity.com/course/self-driving-car-engineer-nanodegree--nd013) in udacity.
 
-Overview
+You can see my [first](https://github.com/Akitsuyoshi/CarND-LaneLines-P1), [second](https://github.com/Akitsuyoshi/CarND-Advanced-Lane-Lines), and [third](https://github.com/Akitsuyoshi/CarND-Traffic-Sign-Classifier-Project) projects as well.
+
+## Table of Contents
+
+- [Behavioral Cloning Project](#behavioral-cloning-project)
+- [Table of Contents](#table-of-contents)
+- [Overview](#overview)
+  - [0 Dependencies](#0-dependencies)
+  - [1 How to run the trained car in the simulation](#1-how-to-run-the-trained-car-in-the-simulation)
+  - [2 Prepare the training / validation sets](#2-prepare-the-training--validation-sets)
+  - [3 Design a model](#3-design-a-model)
+    - [VGG16 setting](#vgg16-setting)
+    - [Model architecture](#model-architecture)
+  - [4 Training strategy](#4-training-strategy)
+  - [5 Output](#5-output)
+  - [6 Summary](#6-summary)
+- [Discussion](#discussion)
+  - [Problem during my implementation](#problem-during-my-implementation)
+  - [Improvements to pipeline](#improvements-to-pipeline)
+  - [Future Feature](#future-feature)
+- [References](#references)
+- [Author](#author)
+
 ---
-This repository contains starting files for the Behavioral Cloning Project.
 
-In this project, you will use what you've learned about deep neural networks and convolutional neural networks to clone driving behavior. You will train, validate and test a model using Keras. The model will output a steering angle to an autonomous vehicle.
+## Overview
 
-We have provided a simulator where you can steer a car around a track for data collection. You'll use image data and steering angles to train a neural network and then use this model to drive the car autonomously around the track.
-
-We also want you to create a detailed writeup of the project. Check out the [writeup template](https://github.com/udacity/CarND-Behavioral-Cloning-P3/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup. The writeup can be either a markdown file or a pdf document.
-
-To meet specifications, the project will require submitting five files: 
-* model.py (script used to create and train the model)
-* drive.py (script to drive the car - feel free to modify this file)
-* model.h5 (a trained Keras model)
-* a report writeup file (either markdown or pdf)
-* video.mp4 (a video recording of your vehicle driving autonomously around the track for at least one full lap)
-
-This README file describes how to output the video in the "Details About Files In This Directory" section.
-
-Creating a Great Writeup
----
-A great writeup should include the [rubric points](https://review.udacity.com/#!/rubrics/432/view) as well as your description of how you addressed each point.  You should include a detailed description of the code used (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
-
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup.
-
-The Project
----
 The goals / steps of this project are the following:
-* Use the simulator to collect data of good driving behavior 
-* Design, train and validate a model that predicts a steering angle from image data
-* Use the model to drive the vehicle autonomously around the first track in the simulator. The vehicle should remain on the road for an entire loop around the track.
-* Summarize the results with a written report
+- Use the Udacity [sample driving dataset](https://d17h27t6h515a5.cloudfront.net/topher/2016/December/584f6edd_data/data.zip)
+- Build, a convolution neural network in Keras and Tensorflow that predicts steering angles from images
+- Train and validate the model with a training and validation set
+- Test that the model successfully drives around track one without leaving the road
+- Summarize the results
 
-### Dependencies
-This lab requires:
+This repo includes following files.
 
-* [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit)
+| File     | Description |
+|:--------:|:-----------:|
+| model.py | the script to create and train the model|
+| driving.py| the script to drive the simulating car in autonomous mode|
+| model.h5 | a trained convolution neural network|
+| run1.mp4| a output video from testing model driving accuracy in the simulation |
+|README.md| a summary of the project|
 
-The lab enviroment can be created with CarND Term1 Starter Kit. Click [here](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) for the details.
+***Note: This repo doesn't contain datasets.***
 
-The following resources can be found in this github repository:
-* drive.py
-* video.py
-* writeup_template.md
+[//]: # (Image References)
 
-The simulator can be downloaded from the classroom. In the classroom, we have also provided sample data that you can optionally use to help train your model.
+[image1]: ./examples/hist1.png "Histogram"
+[image2]: ./examples/hist2.png "Histogram2"
+[image3]: ./examples/vgg16.png "VGG16"
+[image4]: ./examples/vgg16_mark.png "VGG16 Marked"
 
-## Details About Files In This Directory
+---
 
-### `drive.py`
+### 0 Dependencies
 
-Usage of `drive.py` requires you have saved the trained model as an h5 file, i.e. `model.h5`. See the [Keras documentation](https://keras.io/getting-started/faq/#how-can-i-save-a-keras-model) for how to create this file using the following command:
+This project requires:
+
+- [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit)
+- [Udacity self-driving car simulator](https://github.com/udacity/self-driving-car-sim)
+
+I used the started kit with docker to set it up. If you use mac and docker was installed successfully, you can run jupyter notebook on your local machine by this command below.
+
 ```sh
-model.save(filepath)
+docker run -it --rm --entrypoint "/run.sh" -p 8888:8888 -v `pwd`:/src udacity/carnd-term1-starter-kit
 ```
 
-Once the model has been saved, it can be used with drive.py using this command:
+***Note: I got an error while making model in keras. This issue is related to tensorflow-gpu v1.3 problem. The detail for that can be found at [this link](https://stackoverflow.com/questions/49081129/keras-multi-gpu-model-error-swig-python-detected-a-memory-leak-of-type-int64).
+To deal with that, I updated env by this script.***
+
+```sh
+pip install --upgrade tensorflow-gpu==1.4.1
+```
+
+### 1 How to run the trained car in the simulation
+
+Using the Udacity simulator and my drive.py file, the car can be driven autonomously around the track by executing
 
 ```sh
 python drive.py model.h5
 ```
 
-The above command will load the trained model and use the model to make predictions on individual images in real-time and send the predicted angle back to the server via a websocket connection.
+### 2 Prepare the training / validation sets
 
-Note: There is known local system's setting issue with replacing "," with "." when using drive.py. When this happens it can make predicted steering values clipped to max/min values. If this occurs, a known fix for this is to add "export LANG=en_US.utf8" to the bashrc file.
+I first look the deviation of datasets by `matplotlib.pyplot.hist`. The hist looked like:
 
-#### Saving a video of the autonomous agent
+![alt text][image1]
 
-```sh
-python drive.py model.h5 run1
-```
+I filtered to remove 80% of 0 angle image, and then the histogram changed to:
 
-The fourth argument, `run1`, is the directory in which to save the images seen by the agent. If the directory already exists, it'll be overwritten.
+![alt text][image2]
 
-```sh
-ls run1
+Seems it improved a bit deviation of datasets.
 
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_424.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_451.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_477.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_528.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_573.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_618.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_697.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_723.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_749.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_817.jpg
-...
-```
+And I use `sklearn.model_selection.train_test_split` to get training and validating sets. That splitted datasets 80% for training, and 20% for validation sets.
 
-The image file name is a timestamp of when the image was seen. This information is used by `video.py` to create a chronological video of the agent driving.
+### 3 Design a model
 
-### `video.py`
+#### VGG16 setting
 
-```sh
-python video.py run1
-```
+I made used of [VGG16](https://keras.io/api/applications/vgg/#vgg16-function) in keras for the transfer learning.
 
-Creates a video based on images found in the `run1` directory. The name of the video will be the name of the directory followed by `'.mp4'`, so, in this case the video will be `run1.mp4`.
+The picture below describes the VGG16 architecture:
 
-Optionally, one can specify the FPS (frames per second) of the video:
+![alt text][image3]
 
-```sh
-python video.py run1 --fps 48
-```
+To set it up for the later trasfer learning, I remove last three fully connected layers in VGG16. Generally, the first layers in CNN model detected edges or abstract features of datasets, on the other hand, later layers detect problem specific features. So I made last two convolutional layers trainable whereas first three layers are not trainable so that VGG16 model can learn this project datasets well.
 
-Will run the video at 48 FPS. The default FPS is 60.
+Those setting images are like:
 
-#### Why create a video
+![alt text][image4]
 
-1. It's been noted the simulator might perform differently based on the hardware. So if your model drives succesfully on your machine it might not on another machine (your reviewer). Saving a video is a solid backup in case this happens.
-2. You could slightly alter the code in `drive.py` and/or `video.py` to create a video of what your model sees after the image is processed (may be helpful for debugging).
+#### Model architecture
 
-### Tips
-- Please keep in mind that training images are loaded in BGR colorspace using cv2 while drive.py load images in RGB to predict the steering angles.
+My final model consisted of the following layers:
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+| Layer         		|     Description	        					|
+|:---------------------:|:---------------------------------------------:|
+| Input         		| 160x320x3 RGB image   							|
+| Crop      	| Crop input, outputs 75x320x3  	|
+| Rambda			|	Resize input, outputs 96x96x3 									|
+| Rambda	   	| VGG16-specific preprocess input  				|
+| VGG16       |      |
+| Average pooling	      	| 2x2 stride,  outputs 7x7x512   				|
+| Fully connected		| outputs 512  									|
+| RELU				    |           									|
+| Dropout   	      	| 0.8 remains|
+| Fully connected		| outputs 512									|
+| RELU				    |            									|
+| Dropout   	      	| 0.8 remains|
+| Fully connected		| outputs 1   									|
 
+I chose `Adam optimizer`, and `mean squared error` as error function.
+
+A bit confusing part is preprocessing layer. I apply the same input preprocessing method as that of VGG16. Normalization of input data is done by this preprocessing layer in the model.
+
+In the layers after VGG16, three fully connected layers are followed. Dropout layers exists between the fully layers. Also, I chose L2 regularization to the third and second last for preventing overfitting.
+
+
+
+### 4 Training strategy
+
+Hyperparameters for training are:
+
+- 0.005 learning rate
+- 32 batch size
+- 5 Epocs
+
+### 5 Output
+
+### 6 Summary
+
+## Discussion
+
+### Problem during my implementation
+
+### Improvements to pipeline
+
+### Future Feature
+
+---
+
+## References
+
+---
+
+## Author
+
+- [Tsuyoshi Akiyama](https://github.com/Akitsuyoshi)
