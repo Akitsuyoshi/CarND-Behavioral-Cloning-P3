@@ -24,7 +24,7 @@ def get_images_and_labels(samples, is_augment=False):
         img_clr = [img_center, img_left, img_right]
 
         # Steering
-        correction = random.uniform(0.2, 0.25)
+        correction = round(random.uniform(0.2, 0.25), 2)  # Good result for now
         steering_center = round(float(line[3]) * 50) / 50
         steering_left = steering_center + correction
         steering_right = steering_center - correction
@@ -36,25 +36,32 @@ def get_images_and_labels(samples, is_augment=False):
         if not is_augment:
             continue
 
-        for img, steering in zip(img_clr, steering_clr):
-            images.extend([np.fliplr(img),  # Horizontal flipped
-                           random_noise(img),  # Random noise
-                           rotate(img, random.uniform(-15, 15)),  # Random rotation
-                           ndimage.gaussian_filter(img, random.randrange(5, 17, 2)),  # Blurred
-                           adjust_gamma(img, gamma=random.uniform(0, 2), gain=1.),  # Random briteness
-                           ])
+        # Random noised
+        images.append(random_noise(img_center))
+        steering_measurements.append(steering_center)
 
-            steering_measurements.extend([-steering,
-                                          steering,
-                                          steering,
-                                          steering,
-                                          steering,
-                                          ])
+        # Random rotation
+        images.append(rotate(img_center, random.uniform(-15, 15)))
+        steering_measurements.append(steering_center)
+
+        # Blurred
+        images.append(ndimage.gaussian_filter(img_center, random.randrange(5, 15, 2)))
+        steering_measurements.append(steering_center)
+
+        # Random birteness
+        images.append(adjust_gamma(img_center, gamma=random.uniform(0, 3), gain=1.))
+        steering_measurements.append(steering_center)
+
+        # Horizontal flipped
+        if steering_center == 0.:
+            continue
+        images.extend([np.fliplr(img_center), np.fliplr(img_left), np.fliplr(img_right)])
+        steering_measurements.extend([-steering_center, -steering_left, -steering_right])
 
     return images, steering_measurements
 
 
-def generator(samples, batch_size=64, is_augment=False):
+def generator(samples, batch_size=32, is_augment=False):
     while True:  # Loop forever so that generator never terminates
         shuffle(samples)
 
