@@ -19,7 +19,8 @@ You can see my [first](https://github.com/Akitsuyoshi/CarND-LaneLines-P1), [seco
   - [5 Output](#5-output)
   - [6 Summary](#6-summary)
 - [Discussion](#discussion)
-  - [Problem during my implementation](#problem-during-my-implementation)
+  - [Approaches till getting to the final model](#approaches-till-getting-to-the-final-model)
+  - [Problems during my implementation](#problems-during-my-implementation)
   - [Improvements to pipeline](#improvements-to-pipeline)
   - [Future Feature](#future-feature)
 - [References](#references)
@@ -40,16 +41,22 @@ This repo includes following files.
 
 | File     | Description |
 |:--------:|:-----------:|
-| model.py | the script to create and train the model|
-| driving.py| the script to drive the simulating car in autonomous mode|
-| model.h5 | a trained convolution neural network|
-| run1.mp4| a output video from testing model driving accuracy in the simulation |
-|README.md| a summary of the project|
+| [model.py](./model.py) | the script to create and train the model|
+| [driving.py](./drive.py)| the script to drive the simulating car in autonomous mode|
+| [generator.py](./generator.py)| the script to prepare datasets while training a model|
+| [model.h5](./model.h5) | a trained convolution neural network|
+| [run1.mp4](./run1.mp4)| a output video from testing model in the siumulation|
+|README.md| this file, a summary of the project|
 
 ***Note: This repo doesn't contain datasets.***
 
+After feeding good datasets to the well defined model, the model train its input and then simulate a driver behavior well. An output video, those simulation from car perspective, looks like:
+
+![alt text][image0]
+
 [//]: # (Image References)
 
+[image0]: ./examples/run1.gif "Expected output"
 [image1]: ./examples/hist1.png "Histogram"
 [image2]: ./examples/hist2.png "Histogram2"
 [image3]: ./examples/vgg16.png "VGG16"
@@ -64,7 +71,7 @@ This project requires:
 - [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit)
 - [Udacity self-driving car simulator](https://github.com/udacity/self-driving-car-sim)
 
-I used the started kit with docker to set it up. If you use mac and docker was installed successfully, you can run jupyter notebook on your local machine by this command below.
+I used the starter kit with docker to set it up. If you use mac and docker was installed successfully, you can run jupyter notebook on your local machine by this command below.
 
 ```sh
 docker run -it --rm --entrypoint "/run.sh" -p 8888:8888 -v `pwd`:/src udacity/carnd-term1-starter-kit
@@ -79,7 +86,7 @@ pip install --upgrade tensorflow-gpu==1.4.1
 
 ### 1 How to run the trained car in the simulation
 
-Using the Udacity simulator and my drive.py file, the car can be driven autonomously around the track by executing
+Using the Udacity simulator and my [drive.py](./drive.py) file, the car can be driven autonomously around the track by executing
 
 ```sh
 python drive.py model.h5
@@ -91,11 +98,11 @@ I first look the deviation of datasets by `matplotlib.pyplot.hist`. The hist loo
 
 ![alt text][image1]
 
-I filtered to remove 80% of 0 angle image, and then the histogram changed to:
+It obviously shows that 0 angle images exist too much compared to other angle images. So I filtered to remove 80% of 0 angle image, and then the histogram changed to:
 
 ![alt text][image2]
 
-Seems it improved a bit deviation of datasets.
+Seems the filtering improved a bit deviation of datasets.
 
 And I use `sklearn.model_selection.train_test_split` to get training and validating sets. That splitted datasets 80% for training, and 20% for validation sets.
 
@@ -109,11 +116,13 @@ The picture below describes the VGG16 architecture:
 
 ![alt text][image3]
 
-To set it up for the later trasfer learning, I remove last three fully connected layers in VGG16. Generally, the first layers in CNN model detected edges or abstract features of datasets, on the other hand, later layers detect problem specific features. So I made last two convolutional layers trainable whereas first three layers are not trainable so that VGG16 model can learn this project datasets well.
+To set it up for the later trasfer learning, I removed last three fully connected layers in VGG16. Generally, the first layers in CNN model detected edges or abstract features of datasets, on the other hand, later layers detect its input specific features. So I made last two convolutional layers trainable whereas first three layers are not trainable so that VGG16 model can learn this project datasets well.
 
 Those setting images are like:
 
 ![alt text][image4]
+
+The above pictures shows its original inputs size as `(224, 224, 64)`. However, I actually set it to `(96, 96, 3)` because it reduces training time.
 
 #### Model architecture
 
@@ -123,8 +132,8 @@ My final model consisted of the following layers:
 |:---------------------:|:---------------------------------------------:|
 | Input         		| 160x320x3 RGB image   							|
 | Crop      	| Crop input, outputs 75x320x3  	|
-| Rambda			|	Resize input, outputs 96x96x3 									|
-| Rambda	   	| VGG16-specific preprocess input  				|
+| Rambda(Resize)			|	Resize input, outputs 96x96x3 									|
+| Rambda(Preprocess)	   	| VGG16-specific preprocess input  				|
 | VGG16       |      |
 | Average pooling	      	| 2x2 stride,  outputs 7x7x512   				|
 | Fully connected		| outputs 512  									|
@@ -135,13 +144,13 @@ My final model consisted of the following layers:
 | Dropout   	      	| 0.8 remains|
 | Fully connected		| outputs 1   									|
 
-I chose `Adam optimizer`, and `mean squared error` as error function.
+I chose `Adam` as an optimizer, and `mean squared error` as an error function.
 
-A bit confusing part is preprocessing layer. I apply the same input preprocessing method as that of VGG16. Normalization of input data is done by this preprocessing layer in the model.
+In the layers before VGG16, the model crop input at first process so that it lean only interesting part in input data.
 
-In the layers after VGG16, three fully connected layers are followed. Dropout layers exists between the fully layers. Also, I chose L2 regularization to the third and second last for preventing overfitting.
+A bit confusing part is preprocessing layer. I apply the same input preprocessing method as that of VGG16, which is `keras.applications.vgg16.preprocess_input`. Normalization of input data is done by this preprocessing layer in the model.
 
-
+In the layers after VGG16, three fully connected layers are followed. Dropout layers exists between each fully layers. Also, I chose L2 regularization to the third and second last layers for preventing from overfitting.
 
 ### 4 Training strategy
 
@@ -153,11 +162,15 @@ Hyperparameters for training are:
 
 ### 5 Output
 
+The output video can be found at [run1.mp4](./run1.mp4).
+
 ### 6 Summary
 
 ## Discussion
 
-### Problem during my implementation
+### Approaches till getting to the final model
+
+### Problems during my implementation
 
 ### Improvements to pipeline
 
