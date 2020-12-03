@@ -64,6 +64,7 @@ After feeding good datasets to the well-defined model, the model trains its inpu
 [image5]: ./examples/hist3.png "Histogram3"
 [image6]: ./examples/augmentation.png "Augmentation"
 [image7]: ./examples/angles.png "3Angles"
+[image8]: ./examples/model_1.png "Model"
 
 ---
 
@@ -133,29 +134,14 @@ The above VGG16 pictures show its original input size as `(224, 224, 64)`. Howev
 
 #### Model architecture
 
-My final model consisted of the following layers:
-
-| Layer             |     Description                   |
-|:---------------------:|:---------------------------------------------:|
-| Input             | 160x320x3 RGB image                 |
-| Crop        | Crop input, outputs 75x320x3    |
-| Rambda(Resize)      | Resize input, outputs 96x96x3                   |
-| Rambda(Preprocess)      | VGG16-specific preprocess input         |
-| VGG16       |      |
-| Average pooling         | 2x2 stride,  outputs 7x7x512          |
-| Fully connected   | outputs 512                   |
-| RELU            |                             |
-| Dropout             | 0.8 remains|
-| Fully connected   | outputs 512                 |
-| RELU            |                             |
-| Dropout             | 0.8 remains|
-| Fully connected   | outputs 1                     |
+|My final model consisted of the following layers|
+|:--:|
+|![alt text][image8]|
+|plot by `tf.keras.utils.plot_model`|
 
 I chose `Adam` as an optimizer, and `mean squared error` as an error function.
 
-In the layers before VGG16, the model crop input at the first process so that it learns only interesting part in input data.
-
-A bit confusing part is a preprocessing layer. I apply the same input preprocessing method as that of VGG16, which is `keras.applications.vgg16.preprocess_input`. Normalization of input data is done by this preprocessing layer in the model.
+In the layers before VGG16, the model crop input at the first process so that it learns only interesting part in input data. A bit confusing part is a preprocessing layer. I apply the same input preprocessing method as that of VGG16, which is `keras.applications.vgg16.preprocess_input`. Normalization of input data is done by this preprocessing layer in the model.
 
 In the layers after VGG16, three fully connected layers are followed. Dropout layers exist between each fully connected layer. Also, I chose L2 regularization to the third and second last layers for preventing overfitting.
 
