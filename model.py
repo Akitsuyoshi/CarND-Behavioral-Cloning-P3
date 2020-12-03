@@ -6,8 +6,8 @@ import tensorflow as tf
 from math import ceil
 from sklearn.model_selection import train_test_split
 from keras.applications.vgg16 import VGG16, preprocess_input
-from keras.models import Model
-from keras.layers import Dense, Lambda, Dropout, Input, GlobalAveragePooling2D, Cropping2D
+from keras.models import Sequential
+from keras.layers import Dense, Lambda, Dropout, Cropping2D
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint
 
@@ -16,11 +16,14 @@ def get_model():
     """Returns model architecture, get detail by `returned_model.summary()`"""
     # Hyperparams
     train_samples_shape = (160, 320, 3)
-    model_input_shape = (96, 96, 3)
+    input_shape = (96, 96, 3)
 
     # VGG16 setting
-    vgg16 = VGG16(weights='imagenet', include_top=False,
-                  input_shape=model_input_shape)
+    vgg16 = VGG16(weights='imagenet',
+                  include_top=False,
+                  input_shape=input_shape,
+                  pooling='avg')
+
     vgg16.trainable = True
     for layer in vgg16.layers:
         if layer.name in ['block5_conv1', 'block4_conv1']:
@@ -29,24 +32,17 @@ def get_model():
             layer.trainable = False
     vgg16.summary()
 
-    # model input placeholder
-    model_inputs_placeholder = Input(shape=train_samples_shape)
-
-    # For model inputs
-    model_inputs = Cropping2D(cropping=((60, 25), (0, 0)))(model_inputs_placeholder)
-    model_inputs = Lambda(lambda img: tf.image.resize_images(img, (model_input_shape[0], model_input_shape[1])))(model_inputs)
-    model_inputs = Lambda(lambda img: preprocess_input(img))(model_inputs)
-
-    # For model outputs
-    model_outputs = vgg16(model_inputs)
-    model_outputs = GlobalAveragePooling2D()(model_outputs)
-    model_outputs = Dense(512, activation='relu', kernel_regularizer='l2')(model_outputs)
-    model_outputs = Dropout(0.2)(model_outputs)
-    model_outputs = Dense(512, activation='relu', kernel_regularizer='l2')(model_outputs)
-    model_outputs = Dropout(0.2)(model_outputs)
-    model_outputs = Dense(1)(model_outputs)  # Outputs a single value
-
-    return Model(inputs=model_inputs_placeholder, outputs=model_outputs)
+    return Sequential([
+        Cropping2D(cropping=((60, 25), (0, 0)), input_shape=train_samples_shape),
+        Lambda(lambda img: tf.image.resize_images(img, (input_shape[0], input_shape[1]))),
+        Lambda(lambda img: preprocess_input(img)),
+        vgg16,
+        Dense(512, activation='relu', kernel_regularizer='l2'),
+        Dropout(0.2),
+        Dense(512, activation='relu', kernel_regularizer='l2'),
+        Dropout(0.2),
+        Dense(1)  # Outputs a single value
+    ])
 
 
 if __name__ == "__main__":
